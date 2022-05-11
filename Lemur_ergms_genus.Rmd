@@ -1,0 +1,1118 @@
+---
+title: "Lemur_Ergms_Genus"
+author: "Camille"
+date: "4/7/2022"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+library(dplyr);library(igraph);library(bipartite);library(sna);library(network);library(ergm);library(ggplot2);library(reshape2);library("PerformanceAnalytics");library(GGally);library(bipartite);library(ape);library(geiger);library(treeplyr);library("tidyverse");library("geiger");library("treeplyr");library(ggplot2); library(scales);library(ggthemes);library(xergm.common);library(ggpubr) 
+
+#setwd("/Users/camilledesisto/Documents/MadaResearch/TraitNetwork") #set working directory
+
+#load data
+bipart <- read.csv("bipart.csv", header=T) #read in lemur-plant interaction data
+vertextraits <- read.csv("verttraits1_10_22.csv") #read in vertex traits
+smpeffort_l <-read.csv("number_sources_lemurs.csv") #lemur sampling effort
+smpeffort_p<-read.csv("number_sources_plants.csv") #plant sampling effort
+area <- read.csv("lemur_geographic_area.csv") #lemur geographic area
+```
+
+```{r Vertex traits by genus}
+#format vertex traits to be by lemur genus
+
+vertextraits$Genus[vertextraits$Genus=="Lepilemuridae"]<- "Lepilemur"
+vertextraits$Family.y[vertextraits$Family.y=="Lepilemur"]<- "Lepilemuridae"
+
+vertextraits_gn  <- vertextraits %>%
+  filter(!is.na(Genus))
+
+vertextraits_gn_BodyMass <- vertextraits_gn%>%
+  group_by(Genus)%>%
+  summarise(BodyMass_J=mean(BodyMass_J))
+
+vertextraits_gn_BrainSize <- vertextraits_gn%>%
+  group_by(Genus)%>%
+  drop_na(BrainSize_J)%>%
+  summarise(BrainSize_J=mean(BrainSize_J))
+  
+vertextraits_gn_Gestation <- vertextraits_gn%>%
+  group_by(Genus)%>%
+  drop_na(GestationLength_J)%>%
+  summarise(GestationLength_J=mean(GestationLength_J))
+
+vertextraits_gn_Family <- vertextraits_gn%>%
+  group_by(Genus)%>%
+  select(Family.y, Family.y)%>%
+  distinct()
+
+vertextraits_gn_HomeRange <- vertextraits_gn%>%
+  group_by(Genus)%>%
+  drop_na(HomeRange_J)%>%
+  summarise(HoneRange_J=mean(HomeRange_J))
+
+vertextraits_gn_GroupSize <- vertextraits_gn%>%
+  group_by(Genus)%>%
+  drop_na(GroupSize_J)%>%
+  summarise(GroupSize_J=mean(GroupSize_J))
+
+vertextraits_gn_Fruits <- vertextraits_gn%>%
+  group_by(Genus)%>%
+  drop_na(Diet..fruits_O)%>%
+  select(Genus, Diet..fruits_O)%>%
+  distinct()
+vertextraits_gn_Fruits$Diet..fruits_O[vertextraits_gn_Fruits$Genus=="Avahi"]<- "yes"
+vertextraits_gn_Fruits <- distinct(vertextraits_gn_Fruits)
+
+vertextraits_gn_Seeds <- vertextraits_gn%>%
+  group_by(Genus)%>%
+  drop_na(Diet..seeds_O)%>%
+  select(Genus, Diet..seeds_O)%>%
+  distinct()
+vertextraits_gn_Seeds$Diet..seeds_O[vertextraits_gn_Seeds$Genus=="Mirza"]<- "yes"
+vertextraits_gn_Seeds$Diet..seeds_O[vertextraits_gn_Seeds$Genus=="Propithecus"]<- "yes"
+vertextraits_gn_Seeds <- distinct(vertextraits_gn_Seeds)
+
+find_mode <- function(x) {
+  u <- unique(x)
+  tab <- tabulate(match(x, u))
+  u[tab == max(tab)]
+}
+
+vertextraits_gn_IUCN <- vertextraits_gn%>%
+  group_by(Genus)%>%
+  drop_na(IUCN)%>%
+  select(Genus, IUCN)%>%
+  distinct()
+
+#is this the right way to calculate IUCN? Mode and then when there are multiple values repeated the same number of times then default to the more endangered
+vertextraits_gn_IUCN$IUCN[vertextraits_gn_IUCN$Genus=="Avahi"] <- "EN"
+vertextraits_gn_IUCN$IUCN[vertextraits_gn_IUCN$Genus=="Eulemur"] <- "CR"
+vertextraits_gn_IUCN$IUCN[vertextraits_gn_IUCN$Genus=="Hapalemur"] <- "CR"
+vertextraits_gn_IUCN$IUCN[vertextraits_gn_IUCN$Genus=="Lepilemuridae"] <- "CR"
+vertextraits_gn_IUCN$IUCN[vertextraits_gn_IUCN$Genus=="Mirza"] <- "EN"
+vertextraits_gn_IUCN$IUCN[vertextraits_gn_IUCN$Genus=="Propithecus"] <- "CR"
+vertextraits_gn_IUCN$IUCN[vertextraits_gn_IUCN$Genus=="Lepilemur"] <- "CR"
+vertextraits_gn_IUCN$IUCN[vertextraits_gn_IUCN$Genus=="Microcebus"] <- "CR"
+
+vertextraits_gn_IUCN <- distinct(vertextraits_gn_IUCN)
+
+
+vertextraits_gn_Habitat <- vertextraits_gn%>%
+  group_by(Genus)%>%
+  drop_na(Habitat)%>%
+  select(Genus,Habitat)%>%
+  distinct()
+
+vertextraits_gn_Habitat$Habitat[vertextraits_gn_Habitat$Genus=="Avahi"]<- "Widespread"
+vertextraits_gn_Habitat$Habitat[vertextraits_gn_Habitat$Genus=="Eulemur"]<- "Widespread"
+vertextraits_gn_Habitat$Habitat[vertextraits_gn_Habitat$Genus=="Hapalemur"]<- "Widespread"
+vertextraits_gn_Habitat$Habitat[vertextraits_gn_Habitat$Genus=="Lepilemur"]<- "Widespread"
+vertextraits_gn_Habitat$Habitat[vertextraits_gn_Habitat$Genus=="Microcebus"]<- "Widespread"
+vertextraits_gn_Habitat$Habitat[vertextraits_gn_Habitat$Genus=="Propithecus"]<- "Widespread"
+
+vertextraits_gn_Habitat <- distinct(vertextraits_gn_Habitat)
+
+vertextraits_gn3 <- left_join(vertextraits_gn_BodyMass, vertextraits_gn_BrainSize, by="Genus")
+vertextraits_gn3 <- left_join(vertextraits_gn3, vertextraits_gn_Family, by="Genus")
+vertextraits_gn3 <- left_join(vertextraits_gn3,  vertextraits_gn_Fruits, by="Genus")
+vertextraits_gn3 <- left_join(vertextraits_gn3,  vertextraits_gn_Gestation, by="Genus")
+vertextraits_gn3 <- left_join(vertextraits_gn3,  vertextraits_gn_GroupSize, by="Genus")
+vertextraits_gn3 <- left_join(vertextraits_gn3,  vertextraits_gn_Habitat, by="Genus")
+vertextraits_gn3 <- left_join(vertextraits_gn3,  vertextraits_gn_HomeRange, by="Genus")
+vertextraits_gn3 <- left_join(vertextraits_gn3,  vertextraits_gn_IUCN, by="Genus")
+vertextraits_gn3 <- left_join(vertextraits_gn3, vertextraits_gn_Seeds, by="Genus")
+vertextraits_gn3$species <- vertextraits_gn3$Genus
+
+smpeffort_l2 <- smpeffort_l %>%
+   separate(Lemur.Species,
+  into = c("Genus", "Spp"),
+  sep = " ")%>%
+  select(-Spp)%>%
+  group_by(Genus)%>%
+  summarise(Effort_l = sum(Number.of.Sources))
+
+area[100,2]<-"Hapalemur_simus"
+ area[61,2]<-"Lepilemur_sahamalazensis"
+ area[113,]<- cbind (113,"Daubentonia_madagascariensis",as.numeric(125073))
+ area$area<-as.numeric(area$area) 
+area2 <- area %>%
+   separate(species,
+  into = c("Genus", "Spp"),
+  sep = "_")%>%
+  select(-Spp)%>%
+  group_by(Genus)%>%
+  summarise(area = mean(area))
+
+agriculture<- read.csv("agriculture.csv", header=T)
+
+vertextraits_plants <- vertextraits %>%
+  filter(is.na(Genus))%>%
+  select(-c(X:Habitat))
+
+colnames(smpeffort_p) <- c("species", "Effort_p")
+
+vertextraits_plants <- left_join(vertextraits_plants, smpeffort_p, by="species")
+
+vertextraits_gn_new <- full_join(vertextraits_plants, vertextraits_gn3, by="species")
+ vertextraits_gn3 <- left_join(vertextraits_gn_new ,agriculture, by="species") 
+
+ ag <-as.character((agriculture$Agriculture))
+
+vertextraits_gn3 <- left_join(vertextraits_gn3, smpeffort_l2, by="Genus")
+
+vertextraits_gn3 <- left_join(vertextraits_gn3, area2, by="Genus")
+        
+#vertextraits_gn3 <- vertextraits_gn3[-13,]
+vertextraits_gn3$X.1 <- seq(from=1, to=640)
+
+aframomum_traits <- vertextraits["Aframomum"]
+
+ 
+```
+
+```{r}
+bipart2 <- bipart %>%
+  separate(X,
+  into = c("Genus", "Spp"),
+  sep = "_")%>%
+  select(-Spp)%>%
+  group_by(Genus)%>%
+  summarise(across(Abies:Zygophyllum, ~ sum(.x)))
+bipart2 <- as.data.frame(bipart2)
+rownames(bipart2) <- bipart2$Genus
+bipart2 <- bipart2[,-1]
+bipart2[bipart2>=1]<- 1
+bipart3 <- as.matrix(bipart2)
+
+animals <- rownames(bipart2)
+plants <- colnames(bipart)[-1]
+species_names <- as.data.frame(c(animals, plants))
+colnames(species_names) <- "species"
+
+net_gn <- network(bipart3,bipartite=T,matrix.type="bipartite")
+
+
+vertextraits_gn4 <- anti_join(species_names,vertextraits_gn3, by="species")
+
+```
+
+```{r Assign vertex attributes (traits) to the network}
+#set the vertex attributes
+network.vertex.names(net_gn)
+treenames<-as.data.frame(network.vertex.names(net_gn)[15:604])
+colnames(treenames)<-"tree"
+parnames<-as.data.frame(network.vertex.names(net_gn)[1:14])
+colnames(parnames)<-"lemur"
+allvertnames<-as.data.frame(network.vertex.names(net_gn))
+colnames(allvertnames)<-"species"
+lemurs<-vertextraits_gn_new[1:14,]
+vertextraits[match(vertextraits_gn_new$species,network.vertex.names(net_gn)),]
+
+vertextraits_gn_new$seed_length_log_gn[vertextraits_gn_new$seed_length_log_gn=="NaN"] <- NA
+vertextraits_gn_new$seed_width_log_gn[vertextraits_gn_new$seed_width_log_gn=="NaN"] <- NA
+vertextraits_gn_new$fruit_length_log_gn[vertextraits_gn_new$fruit_length_log_gn=="NaN"] <- NA
+vertextraits_gn_new$fruit_width_log_gn[vertextraits_gn_new$fruit_width_log_gn=="NaN"] <- NA
+
+#finally assign the network vertex attributes
+#set the mode "type" and map it onto the combined network 
+lem<-rep("lemur",14)
+tree<-rep("tree",590)
+type<-c(lem,tree)
+
+names(type)<- net_gn %v% 'vertex.names'
+length(type)
+
+network::set.vertex.attribute(net_gn,"type",type)
+network::get.vertex.attribute(net_gn,attrname="type")
+
+##primate tax group
+taxgroup<-as.character(vertextraits_gn_new$Family.y)
+head(taxgroup)
+names(taxgroup)<-vertextraits_gn_new$species
+length(taxgroup)
+taxgroup<-taxgroup[ net_gn %v% 'vertex.names' ]
+network::set.vertex.attribute(net_gn,"taxgroup",taxgroup)
+network::get.vertex.attribute(net_gn,attrname="taxgroup")
+
+##primate tax group re-leveled
+taxgroup<-as.character(vertextraits_gn_new$Family.y)
+head(taxgroup)
+names(taxgroup)<-vertextraits_gn_new$species
+length(taxgroup)
+taxgroup<-taxgroup[ net_gn %v% 'vertex.names' ]
+network::set.vertex.attribute(net_gn,"taxgroup",taxgroup)
+network::get.vertex.attribute(net_gn,attrname="taxgroup")
+
+vertextraits_gn_new$Family.y2 <- vertextraits_gn_new$Family.y
+vertextraits_gn_new$Family.y2[vertextraits_gn_new$Family.y2=="Daubentoniidae"] <-1
+vertextraits_gn_new$Family.y2[vertextraits_gn_new$Family.y2=="Cheirogaleidae"] <-2
+vertextraits_gn_new$Family.y2[vertextraits_gn_new$Family.y2=="Indriidae"] <-3
+vertextraits_gn_new$Family.y2[vertextraits_gn_new$Family.y2=="Lemuridae"] <-4
+vertextraits_gn_new$Family.y2[vertextraits_gn_new$Family.y2=="Lepilemur"] <-5
+vertextraits_gn_new$Family.y2[vertextraits_gn_new$Family.y2=="Lepilemuridae"] <-5
+taxgroup2<-as.character(vertextraits_gn_new$Family.y2)
+head(taxgroup2)
+names(taxgroup2)<-vertextraits_gn_new$species
+length(taxgroup2)
+taxgroup2<-taxgroup2[ net_gn %v% 'vertex.names' ]
+network::set.vertex.attribute(net_gn,"taxgroup2",taxgroup2)
+network::get.vertex.attribute(net_gn,attrname="taxgroup2")
+
+##plant tax group
+taxgroup_tree<-as.character(vertextraits_gn_new$Family.x)
+head(taxgroup_tree)
+names(taxgroup_tree)<-vertextraits_gn_new$species
+length(taxgroup_tree)
+taxgroup_tree<-taxgroup_tree[ net_gn %v% 'vertex.names' ]
+network::set.vertex.attribute(net_gn,"taxgroup_tree",taxgroup_tree)
+network::get.vertex.attribute(net_gn,attrname="taxgroup_tree")
+
+##mass
+mass<-scale(log(vertextraits_gn_new$BodyMass_J+1))
+names(mass)<-vertextraits_gn_new$species
+mass<-mass[ net_gn %v% 'vertex.names' ]
+network::set.vertex.attribute(net_gn,"mass",mass)
+network::get.vertex.attribute(net_gn,attrname="mass")
+
+#lemur sampling effort
+N.l<-scale(vertextraits_gn3$Effort_l)
+names(N.l)<-vertextraits_gn3$species
+N.l<-N.l[ net_gn %v% 'vertex.names' ]
+network::set.vertex.attribute(net_gn,"N.l", N.l)
+network::get.vertex.attribute(net_gn,attrname="N.l")
+
+ #plant sampling effort
+N.p<-scale(log(vertextraits_gn3$Effort_p))
+names(N.p)<-vertextraits_gn3$species
+N.p<-N.p[ net_gn %v% 'vertex.names' ]
+network::set.vertex.attribute(net_gn,"N.p", N.p)
+network::get.vertex.attribute(net_gn,attrname="N.p")
+ 
+##geographic area
+
+ area<-as.numeric(scale(log(vertextraits_gn3$area+1)))
+ names(area)<-vertextraits_gn3$species
+ area<-area[ net_gn %v% 'vertex.names' ]
+ network::set.vertex.attribute(net_gn,"area",area)
+ network::get.vertex.attribute(net_gn,"area")
+ 
+##life history
+gest<-scale(log(vertextraits_gn3$GestationLength_J+1))
+names(gest)<-vertextraits_gn3$species
+length(gest)
+gest<-gest[ net_gn %v% 'vertex.names' ]
+ network::set.vertex.attribute(net_gn,"gest",gest)
+ network::get.vertex.attribute(net_gn,"gest")
+
+##diet
+fruit<-as.character(vertextraits_gn3$Diet..fruits_O)
+names(fruit)<-vertextraits_gn3$species
+length(fruit)
+fruit<-fruit[ net_gn %v% 'vertex.names' ]
+network::set.vertex.attribute(net_gn,"fruit",fruit)
+
+seeds<-as.character(vertextraits_gn3$Diet..seeds_O)
+names(seeds)<-vertextraits_gn3$species
+length(seeds)
+seeds<-seeds[ net_gn %v% 'vertex.names' ]
+network::set.vertex.attribute(net_gn,"seeds",seeds)
+network::get.vertex.attribute(net_gn,"seeds")
+
+##ranging
+hr<-vertextraits_gn3$HoneRange_J
+names(hr)<-vertextraits_gn3$species
+length(hr)
+hr<-hr[ net_gn %v% 'vertex.names' ]
+network::set.vertex.attribute(net_gn,"hr",as.numeric(scale(log(hr+1))))
+
+##threat status re-leveled 
+vertextraits_gn3$IUCN2 <- vertextraits_gn3$IUCN
+vertextraits_gn3$IUCN2 <- as.character(vertextraits_gn3$IUCN2)
+vertextraits_gn3$IUCN2[vertextraits_gn3$IUCN=="LC"] <-1
+vertextraits_gn3$IUCN2[vertextraits_gn3$IUCN=="VU"]<-2
+vertextraits_gn3$IUCN2[vertextraits_gn3$IUCN=="EN"]<-3
+vertextraits_gn3$IUCN2[vertextraits_gn3$IUCN=="CR"]<-4
+Threat2 <- as.character(vertextraits_gn3$IUCN2)
+names(Threat2)<-vertextraits_gn3$species
+Threat2<-Threat2[ net_gn %v% 'vertex.names' ]
+network::set.vertex.attribute(net_gn,"Threat2",Threat2)
+
+####brain size
+brain<- scale(log(vertextraits_gn3$BrainSize_J+1))
+names(brain)<-vertextraits_gn3$species
+length(brain)
+brain<-brain[ net_gn %v% 'vertex.names' ]
+network::set.vertex.attribute(net_gn,"brain", brain)
+
+####habitat
+habitat<-vertextraits_gn3$Habitat
+names(habitat)<-vertextraits_gn3$species
+length(habitat)
+habitat<-habitat[ net_gn %v% 'vertex.names' ]
+network::set.vertex.attribute(net_gn,"habitat",habitat)
+
+###tree traits
+
+##wood density
+density<-as.numeric(scale(((vertextraits_gn_new$meanWD_biomass))))
+names(density)<-vertextraits_gn_new$species
+length(density)
+density<-density[ net_gn %v% 'vertex.names' ]
+network::set.vertex.attribute(net_gn,"density",density)
+network::get.vertex.attribute(net_gn,"density")
+
+##fruit width
+fruit.width<-as.numeric(scale(vertextraits_gn_new$fruit_width_log_gn))
+names(fruit.width)<-vertextraits_gn_new$species
+length(fruit.width)
+fruit.width<-fruit.width[ net_gn %v% 'vertex.names' ]
+network::set.vertex.attribute(net_gn,"fruit.width",fruit.width)
+
+##invasive
+invasive<-as.character((vertextraits_gn_new$Invasive.y))
+names(invasive)<-vertextraits_gn_new$species
+invasive<-invasive[ net_gn %v% 'vertex.names' ]
+network::set.vertex.attribute(net_gn,"invasive",invasive)
+network::get.vertex.attribute(net_gn,"invasive")
+
+#iucn
+iucn<-as.character((vertextraits_gn_new$mIUCN))
+names(iucn)<-vertextraits_gn_new$species
+table(iucn)
+length(iucn)
+iucn<-iucn[ net_gn %v% 'vertex.names' ]
+network::set.vertex.attribute(net_gn,"iucn",iucn)
+network::get.vertex.attribute(net_gn,"iucn")
+
+#endemic
+endemic<-as.character((vertextraits_gn_new$mEndemic))
+names(endemic)<-vertextraits_gn_new$species
+table(endemic)
+length(endemic)
+endemic<-endemic[ net_gn %v% 'vertex.names' ]
+network::set.vertex.attribute(net_gn,"endemic",endemic)
+network::get.vertex.attribute(net_gn,"endemic")
+
+#agriculture
+vertextraits_gn3 <- vertextraits_gn3[!is.na(vertextraits_gn3$species),]
+ag <- (vertextraits_gn3$Agriculture)
+names(ag)<-vertextraits_gn3$species
+table(ag)
+length(ag)
+ag<-ag[ net_gn %v% 'vertex.names' ]
+network::set.vertex.attribute(net_gn,"ag",ag, na.rm=T)
+network::get.vertex.attribute(net_gn,"ag")
+
+```
+
+```{r Complete Network Models: Lemur Trait ERGMs}
+# lemur models with variables that are present for all lemur species
+
+#build models with the various permutations of nodematch/ factor for threat level, taxonomic group, and habitat
+Fm_lemur_full <- ergm( net_gn ~ edges+b2concurrent +b1factor("seeds")+b1factor("fruit")+
+                         b1cov("mass")+b1factor("Threat2")+
+                         b1factor("taxgroup2")+b1cov("area")+b1cov("N.l")+b1factor("habitat"))
+summaryfm_lemur_full<-summary(Fm_lemur_full)
+summaryfm_lemur_full
+
+Fm_lemur_full1 <- ergm( net_gn ~ edges+b2concurrent+b1factor("seeds")+b1factor("fruit")+
+                         b1cov("mass")+b1nodematch("Threat2")+
+                         b1factor("taxgroup2")+b1cov("area")+b1cov("N.l")+b1factor("habitat"))
+summaryfm_lemur_full1<-summary(Fm_lemur_full1)
+summaryfm_lemur_full1
+
+Fm_lemur_full2 <- ergm( net_gn ~ edges+b2concurrent+b1factor("seeds")+b1factor("fruit")+
+                         b1cov("mass")+b1factor("Threat2")+
+                         b1nodematch("taxgroup2")+b1cov("area")+b1cov("N.l")+b1factor("habitat"))
+summaryfm_lemur_full2 <- summary(Fm_lemur_full2)
+summaryfm_lemur_full2
+
+Fm_lemur_full3 <- ergm( net_gn ~ edges+b2concurrent+b1factor("seeds")+b1factor("fruit")+
+                         b1cov("mass")+b1factor("Threat2")+
+                         b1factor("taxgroup2")+b1cov("area")+b1cov("N.l")+b1nodematch("habitat"))
+summaryfm_lemur_full3<-summary(Fm_lemur_full3)
+summaryfm_lemur_full3
+
+Fm_lemur_full4 <- ergm( net_gn ~ edges+b2concurrent+b1factor("seeds")+b1factor("fruit")+
+                         b1cov("mass")+b1nodematch("Threat2")+
+                         b1nodematch("taxgroup2")+b1cov("area")+b1cov("N.l")+b1factor("habitat"))
+summaryfm_lemur_full4<-summary(Fm_lemur_full4)
+summaryfm_lemur_full4
+
+Fm_lemur_full5 <- ergm( net_gn ~ edges+b2concurrent+b1factor("seeds")+b1factor("fruit")+
+                         b1cov("mass")+b1nodematch("Threat2")+
+                         b1factor("taxgroup2")+b1cov("area")+b1cov("N.l")+b1nodematch("habitat"))
+summaryfm_lemur_full5<-summary(Fm_lemur_full5)
+summaryfm_lemur_full5
+
+Fm_lemur_full6 <- ergm( net_gn ~ edges+b2concurrent+b1factor("seeds")+b1factor("fruit")+
+                         b1cov("mass")+b1factor("Threat2")+
+                         b1nodematch("taxgroup2")+b1cov("area")+b1cov("N.l")+b1nodematch("habitat"))
+summaryfm_lemur_full6<-summary(Fm_lemur_full6)
+summaryfm_lemur_full6
+
+Fm_lemur_full7 <- ergm( net_gn ~ edges+b2concurrent+b1factor("seeds")+b1factor("fruit")+
+                         b1cov("mass")+b1nodematch("Threat2")+
+                         b1nodematch("taxgroup2")+b1cov("area")+b1cov("N.l")+b1nodematch("habitat"))
+summaryfm_lemur_full7<-summary(Fm_lemur_full7)
+summaryfm_lemur_full7
+
+
+
+AIC(Fm_lemur_full, Fm_lemur_full1, Fm_lemur_full2, Fm_lemur_full3, Fm_lemur_full4, Fm_lemur_full5, Fm_lemur_full6, Fm_lemur_full7)
+
+fm_complete_lemurs <- summaryfm_lemur_full
+```
+
+```{r Complete Network Models: Tree Trait ERGMs}
+
+Fm_tree_full <- ergm( net_gn ~ edges+b2concurrent+b2cov("density")+b2cov("N.p")+b2nodematch("taxgroup_tree")
+                      +b2factor("ag")+b2factor("invasive"))
+summaryfm_tree_full<-summary(Fm_tree_full)
+summaryfm_tree_full
+
+fm_complete_trees <- summaryfm_tree_full
+
+Fm_tree_full1 <- ergm( net_gn ~ edges+b2concurrent+b2cov("density")+b2cov("N.p")+b2nodematch("taxgroup_tree")
+                      +b2factor("invasive"))
+summaryfm_tree_full1<-summary(Fm_tree_full1)
+summaryfm_tree_full1
+
+Fm_tree_full2 <- ergm( net_gn ~ edges+b2concurrent+b2cov("density")+b2cov("N.p")+b2nodematch("taxgroup_tree"))
+summaryfm_tree_full2<-summary(Fm_tree_full2)
+summaryfm_tree_full2
+
+Fm_tree_full3 <- ergm( net_gn ~ edges+b2cov("density")+b2cov("N.p")+b2nodematch("taxgroup_tree"))
+summaryfm_tree_full3<-summary(Fm_tree_full3)
+summaryfm_tree_full3
+
+AIC(Fm_tree_full, Fm_tree_full1, Fm_tree_full2, Fm_tree_full3)
+
+fm_complete_trees <- summaryfm_tree_full3
+
+```
+
+```{r Complete net_gnwork Models: Both Lemur and Tree Trair ERGMs}
+
+Fm_both_full <- ergm( net_gn ~ edges+ b2concurrent+b1factor("seeds")+b1factor("fruit")+
+                         b1cov("mass")+b1factor("Threat2")+
+                         b1factor("taxgroup2")+b1cov("area")+b1cov("N.l")+b1factor("habitat")
+                      +b2cov("density")+b2cov("N.p")+b2nodematch("taxgroup_tree")
+                      +b2factor("ag")+b2factor("invasive"))
+summaryfm_both_full<-summary(Fm_both_full)
+summaryfm_both_full
+
+Fm_both_full1 <- ergm( net_gn ~ edges+ b2concurrent+b1factor("seeds")+b1factor("fruit")+
+                         b1cov("mass")+b1nodematch("Threat2")+
+                         b1factor("taxgroup2")+b1cov("area")+b1cov("N.l")+b1factor("habitat")
+                       +b2cov("density")+b2cov("N.p")+b2nodematch("taxgroup_tree")
+                      +b2factor("ag")+b2factor("invasive"))
+summaryfm_both_full1<-summary(Fm_both_full1)
+summaryfm_both_full1
+
+Fm_both_full2 <- ergm( net_gn ~ edges+ b2concurrent+b1factor("seeds")+b1factor("fruit")+
+                         b1cov("mass")+b1factor("Threat2")+
+                         b1nodematch("taxgroup2")+b1cov("area")+b1cov("N.l")+b1factor("habitat")
+                       +b2cov("density")+b2cov("N.p")+b2nodematch("taxgroup_tree")
+                      +b2factor("ag")+b2factor("invasive"))
+summaryfm_both_full2 <- summary(Fm_both_full2)
+summaryfm_both_full2
+
+Fm_both_full3 <- ergm( net_gn ~ edges +b2concurrent+b1factor("seeds")+b1factor("fruit")+
+                         b1cov("mass")+b1factor("Threat2")+
+                         b1factor("taxgroup2")+b1cov("area")+b1cov("N.l")+b1nodematch("habitat")
+                       +b2cov("density")+b2cov("N.p")+b2nodematch("taxgroup_tree")
+                      +b2factor("ag")+b2factor("invasive"))
+summaryfm_both_full3<-summary(Fm_both_full3)
+summaryfm_both_full3
+
+Fm_both_full4 <- ergm( net_gn ~ edges+ b2concurrent+b1factor("seeds")+b1factor("fruit")+
+                         b1cov("mass")+b1nodematch("Threat2")+
+                         b1nodematch("taxgroup2")+b1cov("area")+b1cov("N.l")+b1factor("habitat")
+                       +b2cov("density")+b2cov("N.p")+b2nodematch("taxgroup_tree")
+                      +b2factor("ag")+b2factor("invasive"))
+summaryfm_both_full4<-summary(Fm_both_full4)
+summaryfm_both_full4
+
+Fm_both_full5 <- ergm( net_gn ~ edges+ b2concurrent+b1factor("seeds")+b1factor("fruit")+
+                         b1cov("mass")+b1nodematch("Threat2")+
+                         b1factor("taxgroup2")+b1cov("area")+b1cov("N.l")+b1nodematch("habitat")
+                       +b2cov("density")+b2cov("N.p")+b2nodematch("taxgroup_tree")
+                      +b2factor("ag")+b2factor("invasive"))
+summaryfm_both_full5<-summary(Fm_both_full5)
+summaryfm_both_full5
+
+Fm_both_full6 <- ergm( net_gn ~ edges+ b2concurrent+b1factor("seeds")+b1factor("fruit")+
+                         b1cov("mass")+b1factor("Threat2")+
+                         b1nodematch("taxgroup2")+b1cov("area")+b1cov("N.l")+b1nodematch("habitat")
+                       +b2cov("density")+b2cov("N.p")+b2nodematch("taxgroup_tree")
+                      +b2factor("ag")+b2factor("invasive"))
+summaryfm_both_full6<-summary(Fm_both_full6)
+summaryfm_both_full6
+
+Fm_both_full7 <- ergm( net_gn ~ edges+ b2concurrent+b1factor("seeds")+b1factor("fruit")+
+                         b1cov("mass")+b1nodematch("Threat2")+
+                         b1nodematch("taxgroup2")+b1cov("area")+b1cov("N.l")+b1nodematch("habitat")
+                       +b2cov("density")+b2cov("N.p")+b2nodematch("taxgroup_tree")
+                      +b2factor("ag")+b2factor("invasive"))
+summaryfm_both_full7<-summary(Fm_both_full7)
+summaryfm_both_full7
+
+
+AIC(Fm_both_full, Fm_both_full1, Fm_both_full2, Fm_both_full3, Fm_both_full4, Fm_both_full5, Fm_both_full6, Fm_both_full7)
+
+#Fm_both_full is the best model type
+Fm_both_fulla <- ergm( net_gn ~ edges+ b2concurrent+b1factor("seeds")+b1factor("fruit")+
+                         b1cov("mass")+b1factor("Threat2")+
+                         b1factor("taxgroup2")+b1cov("area")+b1cov("N.l")+b1factor("habitat")
+                      +b2cov("density")+b2cov("N.p")+b2nodematch("taxgroup_tree")
+                      +b2factor("invasive"))
+summaryfm_both_fulla<-summary(Fm_both_fulla)
+summaryfm_both_fulla
+
+Fm_both_fullb <- ergm( net_gn ~ edges+ b2concurrent+b1factor("seeds")+b1factor("fruit")+
+                         b1cov("mass")+b1factor("Threat2")+
+                         b1factor("taxgroup2")+b1cov("area")+b1cov("N.l")+b1factor("habitat")
+                      +b2cov("N.p")+b2nodematch("taxgroup_tree")
+                      +b2factor("invasive"))
+summaryfm_both_fullb<-summary(Fm_both_fullb)
+summaryfm_both_fullb
+
+Fm_both_fullc <- ergm( net_gn ~ edges+ b2concurrent+b1factor("seeds")+b1factor("fruit")+
+                         b1cov("mass")+b1factor("Threat2")+
+                         b1factor("taxgroup2")+b1cov("area")+b1cov("N.l")+b1factor("habitat")
+                      +b2cov("N.p")+b2nodematch("taxgroup_tree"))
+summaryfm_both_fullc<-summary(Fm_both_fullc)
+summaryfm_both_fullc
+
+AIC(Fm_both_full,Fm_both_fulla, Fm_both_fullb, Fm_both_fullc)
+
+#Fm_both_fullc is the best model because it has a low AIC 
+
+fm_complete_both <- summaryfm_both_fullc
+
+```
+
+```{r NOT RUN YET Coefficient Plot: Complete Network Models: Both Lemur and Tree Trair ERGMs}
+
+full_model_all <- as.data.frame(summaryfm_both_fulld$coefs)
+Independent_Variable_all <- c("Edges","Concurrent Nodes","Seed Diet", "Fruit Diet",  "Body Mass",
+                           "Vulnerable Lemur","Endangered Lemur", 
+                          "Critically Endangered Lemur", "Cheirogaleidae", "Indriidae", 
+                          "Lemuridae", "Lepilemuridae", "Lemur Geographic Area", 
+                          "Lemur Sampling Effort", "Wet Habitat","Widespread Habitat", "Tree Sampling Effort",
+                           "Tree Taxonomic Group")
+Type2 <- c("Network Structure","Network Structure", "Factor", "Factor",  "Continuous",
+           "Factor", "Factor","Factor","Factor","Factor","Factor","Factor","Continuous",
+           "Continuous","Factor","Factor", "Continuous", "Nodematch")
+full_model_all <- cbind(full_model_all, Independent_Variable_all, Type2)
+full_model_all$Error <- full_model_all$`Std. Error`
+
+full_model_all$Independent_Variable_all2 <- factor(full_model_all$Independent_Variable_all, levels = c("Edges","Concurrent Nodes","Seed Diet", "Fruit Diet",  "Body Mass",
+                           "Vulnerable Lemur","Endangered Lemur", 
+                          "Critically Endangered Lemur", "Cheirogaleidae", "Indriidae", 
+                          "Lemuridae", "Lepilemuridae", "Lemur Geographic Area", 
+                          "Lemur Sampling Effort", "Wet Habitat","Widespread Habitat", 
+                           "Tree Taxonomic Group","Tree Sampling Effort"))
+
+full_model_all <- full_model_all %>%
+  select(Estimate, Independent_Variable_all2, Type2, Error)
+
+coef_complete <-ggplot(full_model_all, aes(x=Estimate, y=Independent_Variable_all2, color=Type2))+
+  theme_minimal()+
+  geom_vline(xintercept=0, linetype="dashed")+
+  geom_point()+
+  ylab("Parameter")+
+  geom_errorbarh(aes(xmax = Estimate + Error, xmin = Estimate - Error))+
+  scale_color_colorblind("Parameter Type")+
+   theme(legend.position = "none")
+
+```
+
+```{r All Traits Models: Lemur Trait ERGMs}
+
+#subset model so all traits are available
+
+subgraph_reduced_brain<-get.inducedSubgraph(net_gn,which(!is.na(net_gn%v%"brain")|net_gn%v%"type"=="tree"))
+subgraph_reduced_brain
+plot(subgraph_reduced_brain, displaylabels = F)
+network.vertex.names(subgraph_reduced_brain)
+subgraph_reduced_brain%v%"degree"<-sna::degree(subgraph_reduced_brain,cmode="indegree")
+summary(subgraph_reduced_brain%v%"degree")
+subgraph_reduced_brain<-get.inducedSubgraph(subgraph_reduced_brain,which(subgraph_reduced_brain%v%"degree">0))
+
+subgraph_reduced_hr2 <-get.inducedSubgraph(subgraph_reduced_brain,which(!is.na(subgraph_reduced_brain%v%"hr")|subgraph_reduced_brain%v%"type"=="tree"))
+subgraph_reduced_hr2
+plot(subgraph_reduced_hr2, displaylabels = F)
+network.vertex.names(subgraph_reduced_hr2)
+subgraph_reduced_hr2%v%"degree"<-sna::degree(subgraph_reduced_hr2,cmode="indegree")
+summary(subgraph_reduced_hr2%v%"degree")
+subgraph_reduced_hr2<-get.inducedSubgraph(subgraph_reduced_hr2,which(subgraph_reduced_hr2%v%"degree">0))
+
+subgraph_reduced_gest2 <-get.inducedSubgraph(subgraph_reduced_hr2,which(!is.na(subgraph_reduced_hr2%v%"gest")|subgraph_reduced_hr2%v%"type"=="tree"))
+subgraph_reduced_gest2
+plot(subgraph_reduced_gest2, displaylabels = F)
+network.vertex.names(subgraph_reduced_gest2)
+subgraph_reduced_gest2%v%"degree"<-sna::degree(subgraph_reduced_hr2,cmode="indegree")
+summary(subgraph_reduced_gest2%v%"degree")
+subgraph_reduced_gest2<-get.inducedSubgraph(subgraph_reduced_gest2,which(subgraph_reduced_gest2%v%"degree">0))
+
+#models 
+#build models with the various permutations of nodematch/ factor for threat level, taxonomic group, and habitat
+Fm_lemur_all <- ergm(subgraph_reduced_gest2  ~ edges +b2concurrent+ b1factor("seeds")+b1factor("fruit")+
+                         b1cov("mass")+b1factor("Threat2")+
+                         b1factor("taxgroup2")+b1cov("area")+b1cov("N.l")+b1factor("habitat")+ 
+                         b1cov("gest")+ b1cov("hr")+ b1cov("brain"))
+summaryfm_lemur_all<-summary(Fm_lemur_all)
+summaryfm_lemur_all
+# seriously low accuracy
+
+Fm_lemur_all <- ergm(subgraph_reduced_gest2  ~ edges +b2concurrent+ b1factor("seeds")+b1factor("fruit")+
+                         b1cov("mass")+b1factor("Threat2")+
+                         b1factor("taxgroup2")+b1cov("area")+b1cov("N.l")+b1factor("habitat")+ 
+                         b1cov("gest")+ b1cov("hr")+ b1cov("brain"))
+summaryfm_lemur_all<-summary(Fm_lemur_all)
+summaryfm_lemur_all
+#this model has seriously low accuracy
+
+Fm_lemur_all2 <- ergm(subgraph_reduced_gest2 ~ edges+b2concurrent+b1factor("seeds")+b1factor("fruit")+
+                         b1cov("mass")+b1factor("Threat2")+
+                         b1nodematch("taxgroup2")+b1cov("area")+b1cov("N.l")+b1factor("habitat")+ 
+                         b1cov("gest")+ b1cov("hr")+ b1cov("brain"))
+summaryfm_lemur_all2 <- summary(Fm_lemur_all2)
+summaryfm_lemur_all2
+
+Fm_lemur_all3 <- ergm(subgraph_reduced_gest2  ~ edges+b2concurrent+b1factor("seeds")+b1factor("fruit")+
+                         b1cov("mass")+b1factor("Threat2")+
+                         b1factor("taxgroup2")+b1cov("area")+b1cov("N.l")+b1nodematch("habitat")+ 
+                         b1cov("gest")+ b1cov("hr")+ b1cov("brain"))
+summaryfm_lemur_all3<-summary(Fm_lemur_all3)
+summaryfm_lemur_all3
+#model has seriously low accuracy
+
+Fm_lemur_all4 <- ergm(subgraph_reduced_gest2 ~ edges+b2concurrent+b1factor("seeds")+b1factor("fruit")+
+                         b1cov("mass")+b1nodematch("Threat2")+
+                         b1nodematch("taxgroup2")+b1cov("area")+b1cov("N.l")+b1factor("habitat")+ 
+                         b1cov("gest")+ b1cov("hr")+ b1cov("brain"))
+summaryfm_lemur_all4<-summary(Fm_lemur_all4)
+summaryfm_lemur_all4
+
+Fm_lemur_all5 <- ergm(subgraph_reduced_gest2 ~ edges+b2concurrent+b1factor("seeds")+b1factor("fruit")+
+                         b1cov("mass")+b1nodematch("Threat2")+
+                         b1factor("taxgroup2")+b1cov("area")+b1cov("N.l")+b1nodematch("habitat")+ 
+                         b1cov("gest")+ b1cov("hr")+ b1cov("brain"))
+summaryfm_lemur_all5<-summary(Fm_lemur_all5)
+summaryfm_lemur_all5
+#model has seriously low accuracy
+
+Fm_lemur_all6 <- ergm(subgraph_reduced_gest2  ~ edges+b2concurrent+b1factor("seeds")+b1factor("fruit")+
+                         b1cov("mass")+b1factor("Threat2")+
+                         b1nodematch("taxgroup2")+b1cov("area")+b1cov("N.l")+b1nodematch("habitat")+ 
+                         b1cov("gest")+ b1cov("hr")+ b1cov("brain"))
+summaryfm_lemur_all6<-summary(Fm_lemur_all6)
+summaryfm_lemur_all6
+
+Fm_lemur_all7 <- ergm(subgraph_reduced_gest2  ~ edges+b2concurrent+b1factor("seeds")+b1factor("fruit")+
+                         b1cov("mass")+b1nodematch("Threat2")+
+                         b1nodematch("taxgroup2")+b1cov("area")+b1cov("N.l")+b1nodematch("habitat")+ 
+                         b1cov("gest")+ b1cov("hr")+ b1cov("brain"))
+summaryfm_lemur_all7<-summary(Fm_lemur_all7)
+summaryfm_lemur_all7
+
+
+AIC(Fm_lemur_all2, Fm_lemur_all4, Fm_lemur_all6, Fm_lemur_all7)
+
+Fm_lemur_all2a <- ergm(subgraph_reduced_gest2 ~ edges+b2concurrent+b1factor("seeds")+b1factor("fruit")+
+                         b1cov("mass")+b1factor("Threat2")+
+                         b1cov("area")+b1cov("N.l")+b1factor("habitat")+ 
+                         b1cov("gest")+ b1cov("hr")+ b1cov("brain"))
+summaryfm_lemur_all2a <- summary(Fm_lemur_all2a)
+summaryfm_lemur_all2a
+
+AIC(Fm_lemur_all2, Fm_lemur_all2a)
+
+fm_all_lemurs <- summaryfm_lemur_all2a
+
+lemur_model <- as.data.frame(summaryfm_lemur_all2a$coefs)
+```
+
+```{r All Traits Models: Plant Trait ERGMs}
+
+#subgraph network
+
+#subgraph the network 
+subgraph_reduced_fw<-get.inducedSubgraph(net_gn,which(!is.na(net_gn%v%"fruit.width")|net_gn%v%"type"=="lemur"))
+network.vertex.names(subgraph_reduced_fw)
+subgraph_reduced_fw%v%"degree"<-sna::degree(subgraph_reduced_fw,cmode="indegree")
+summary(subgraph_reduced_fw%v%"degree")
+subgraph_reduced_fw<-get.inducedSubgraph(subgraph_reduced_fw,which(subgraph_reduced_fw%v%"degree">0))
+
+subgraph_reduced_tree<-get.inducedSubgraph(subgraph_reduced_fw,which(!is.na(subgraph_reduced_fw%v%"iucn")|subgraph_reduced_fw%v%"type"=="lemur"))
+network.vertex.names(subgraph_reduced_tree)
+subgraph_reduced_tree%v%"degree"<-sna::degree(subgraph_reduced_tree,cmode="indegree")
+summary(subgraph_reduced_tree%v%"degree")
+subgraph_reduced_tree<-get.inducedSubgraph(subgraph_reduced_tree,which(subgraph_reduced_tree%v%"degree">0))
+
+subgraph_reduced_tree2<-get.inducedSubgraph(subgraph_reduced_tree,which(!is.na(subgraph_reduced_tree%v%"endemic")|subgraph_reduced_tree%v%"type"=="lemur"))
+network.vertex.names(subgraph_reduced_tree)
+subgraph_reduced_tree%v%"degree"<-sna::degree(subgraph_reduced_tree,cmode="indegree")
+summary(subgraph_reduced_tree%v%"degree")
+subgraph_reduced_tree<-get.inducedSubgraph(subgraph_reduced_tree,which(subgraph_reduced_tree%v%"degree">0))
+
+
+#tree full models 
+Fm_tree <-ergm (subgraph_reduced_tree2 ~ edges+ b2concurrent+
+               b2cov("N.p")+b2cov("density")+
+               b2cov("fruit.width")+
+               b2nodematch("iucn")+b2nodematch("taxgroup_tree")+
+               b2factor("ag")+b2factor("invasive")+ b2factor("endemic"))
+summaryfm_tree<-summary(Fm_tree)
+summaryfm_tree
+
+Fm_tree1 <-ergm (subgraph_reduced_tree2 ~ edges+ b2concurrent+
+               b2cov("N.p")+b2cov("density")+
+               b2cov("fruit.width")+
+               b2factor("iucn")+b2nodematch("taxgroup_tree")+
+               b2factor("ag")+b2factor("invasive")+ b2factor("endemic"))
+summaryfm_tree1<-summary(Fm_tree1)
+summaryfm_tree1
+
+AIC(Fm_tree, Fm_tree1)
+
+#move forward with fm_tree1
+
+Fm_tree1a <-ergm (subgraph_reduced_tree2 ~ edges+ b2concurrent+
+               b2cov("N.p")+
+               b2cov("fruit.width")+
+               b2factor("iucn")+b2nodematch("taxgroup_tree")+
+               b2factor("ag")+b2factor("invasive")+ b2factor("endemic"))
+summaryfm_tree1a<-summary(Fm_tree1a)
+summaryfm_tree1a
+
+Fm_tree1b <-ergm (subgraph_reduced_tree2 ~ edges+ b2concurrent+
+               b2cov("N.p")+
+               b2cov("fruit.width")+
+               b2nodematch("taxgroup_tree")+
+               b2factor("ag")+b2factor("invasive")+ b2factor("endemic"))
+summaryfm_tree1b<-summary(Fm_tree1b)
+summaryfm_tree1b
+
+Fm_tree1c <-ergm (subgraph_reduced_tree2 ~ edges+ b2concurrent+
+               b2cov("N.p")+
+               b2cov("fruit.width")+
+               b2nodematch("taxgroup_tree")+
+               b2factor("invasive")+ b2factor("endemic"))
+summaryfm_tree1c<-summary(Fm_tree1c)
+summaryfm_tree1c
+
+Fm_tree1d <-ergm (subgraph_reduced_tree2 ~ edges+ b2concurrent+
+               b2cov("N.p")+
+               b2cov("fruit.width")+
+               b2nodematch("taxgroup_tree"))
+summaryfm_tree1d<-summary(Fm_tree1d)
+summaryfm_tree1d
+
+AIC(Fm_tree1, Fm_tree1a, Fm_tree1b, Fm_tree1c, Fm_tree1d)
+#Fm_tree1d is the best model because it has the lowest AIC
+fm_all_trees <- summaryfm_tree1d
+
+```
+
+
+```{r All Traits Models: Both Lemur and Plant Trait ERGMs}
+subgraph_reduced_fw2<-get.inducedSubgraph(subgraph_reduced_gest2,which(!is.na(subgraph_reduced_gest2%v%"fruit.width")|subgraph_reduced_gest2%v%"type"=="lemur"))
+network.vertex.names(subgraph_reduced_fw2)
+subgraph_reduced_fw2%v%"degree"<-sna::degree(subgraph_reduced_fw2,cmode="indegree")
+summary(subgraph_reduced_fw2%v%"degree")
+subgraph_reduced_fw2<-get.inducedSubgraph(subgraph_reduced_fw2,which(subgraph_reduced_fw2%v%"degree">0))
+
+subgraph_reduced_treeb<-get.inducedSubgraph(subgraph_reduced_fw2,which(!is.na(subgraph_reduced_fw2%v%"iucn")|subgraph_reduced_fw2%v%"type"=="lemur"))
+network.vertex.names(subgraph_reduced_treeb)
+subgraph_reduced_treeb%v%"degree"<-sna::degree(subgraph_reduced_treeb,cmode="indegree")
+summary(subgraph_reduced_treeb%v%"degree")
+subgraph_reduced_treeb<-get.inducedSubgraph(subgraph_reduced_treeb,which(subgraph_reduced_treeb%v%"degree">0))
+
+subgraph_reduced_tree2b<-get.inducedSubgraph(subgraph_reduced_treeb,which(!is.na(subgraph_reduced_treeb%v%"endemic")|subgraph_reduced_treeb%v%"type"=="lemur"))
+network.vertex.names(subgraph_reduced_tree2b)
+subgraph_reduced_tree2b%v%"degree"<-sna::degree(subgraph_reduced_tree2b,cmode="indegree")
+summary(subgraph_reduced_tree2b%v%"degree")
+subgraph_reduced_tree2b<-get.inducedSubgraph(subgraph_reduced_tree2b,which(subgraph_reduced_tree2b%v%"degree">0))
+
+
+Fm_both_all <- ergm(subgraph_reduced_tree2b ~ edges+b1factor("seeds")+b1factor("fruit")+
+                         b1cov("mass")+b1factor("Threat2")+
+                         b1factor("taxgroup2")+b1cov("area")+b1cov("N.l")+b1factor("habitat")+ 
+                         b1cov("gest")+ b1cov("hr")+ b1cov("brain") +b2concurrent+
+               b2cov("N.p")+b2cov("density")+
+               b2cov("fruit.width")+
+               b2nodematch("iucn")+b2nodematch("taxgroup_tree")+
+               b2factor("ag")+b2factor("invasive")+ b2factor("endemic"))
+summaryfm_both_all<-summary(Fm_both_all)
+summaryfm_both_all
+#seriously low accuracy
+
+Fm_both_all1 <- ergm(subgraph_reduced_tree2b ~ edges+b1factor("seeds")+b1factor("fruit")+
+                         b1cov("mass")+b1nodematch("Threat2")+
+                         b1factor("taxgroup2")+b1cov("area")+b1cov("N.l")+b1factor("habitat")+ 
+                         b1cov("gest")+ b1cov("hr")+ b1cov("brain")+b2concurrent+
+               b2cov("N.p")+b2cov("density")+
+               b2cov("fruit.width")+
+               b2nodematch("iucn")+b2nodematch("taxgroup_tree")+
+               b2factor("ag")+b2factor("invasive")+ b2factor("endemic"))
+summaryfm_both_all1<-summary(Fm_both_all1)
+summaryfm_both_all1
+#seriously low accuracy
+
+Fm_both_all2 <- ergm(subgraph_reduced_tree2b ~ edges+b1factor("seeds")+b1factor("fruit")+
+                         b1cov("mass")+b1factor("Threat2")+
+                         b1nodematch("taxgroup2")+b1cov("area")+b1cov("N.l")+b1factor("habitat")+ 
+                         b1cov("gest")+ b1cov("hr")+ b1cov("brain")+b2concurrent+
+               b2cov("N.p")+b2cov("density")+
+               b2cov("fruit.width")+
+               b2nodematch("iucn")+b2nodematch("taxgroup_tree")+
+               b2factor("ag")+b2factor("invasive")+ b2factor("endemic"))
+summaryfm_both_all2 <- summary(Fm_both_all2)
+summaryfm_both_all2
+
+Fm_both_all3 <- ergm(subgraph_reduced_tree2b  ~ edges+b1factor("seeds")+b1factor("fruit")+
+                         b1cov("mass")+b1factor("Threat2")+
+                         b1factor("taxgroup2")+b1cov("area")+b1cov("N.l")+b1nodematch("habitat")+ 
+                         b1cov("gest")+ b1cov("hr")+ b1cov("brain")+b2concurrent+
+               b2cov("N.p")+b2cov("density")+
+               b2cov("fruit.width")+
+               b2nodematch("iucn")+b2nodematch("taxgroup_tree")+
+               b2factor("ag")+b2factor("invasive")+ b2factor("endemic"))
+summaryfm_both_all3<-summary(Fm_both_all3)
+summaryfm_both_all3
+#seriously low accuracy
+
+Fm_both_all4 <- ergm(subgraph_reduced_tree2b ~ edges+b1factor("seeds")+b1factor("fruit")+
+                         b1cov("mass")+b1nodematch("Threat2")+
+                         b1nodematch("taxgroup2")+b1cov("area")+b1cov("N.l")+b1factor("habitat")+ 
+                         b1cov("gest")+ b1cov("hr")+ b1cov("brain")+b2concurrent+
+               b2cov("N.p")+b2cov("density")+
+               b2cov("fruit.width")+
+               b2nodematch("iucn")+b2nodematch("taxgroup_tree")+
+               b2factor("ag")+b2factor("invasive")+ b2factor("endemic"))
+summaryfm_both_all4<-summary(Fm_both_all4)
+summaryfm_both_all4
+
+Fm_both_all5 <- ergm(subgraph_reduced_tree2b ~ edges+b1factor("seeds")+b1factor("fruit")+
+                         b1cov("mass")+b1nodematch("Threat2")+
+                         b1factor("taxgroup2")+b1cov("area")+b1cov("N.l")+b1nodematch("habitat")+ 
+                         b1cov("gest")+ b1cov("hr")+ b1cov("brain")+b2concurrent+
+               b2cov("N.p")+b2cov("density")+
+               b2cov("fruit.width")+
+               b2nodematch("iucn")+b2nodematch("taxgroup_tree")+
+               b2factor("ag")+b2factor("invasive")+ b2factor("endemic"))
+summaryfm_both_all5<-summary(Fm_both_all5)
+summaryfm_both_all5
+#seriously low accuracy
+
+Fm_both_all6 <- ergm(subgraph_reduced_tree2b  ~ edges+b1factor("seeds")+b1factor("fruit")+
+                         b1cov("mass")+b1factor("Threat2")+b1cov("N.l")+
+                         b1nodematch("taxgroup2")+b1cov("area")+b1nodematch("habitat")+ 
+                         b1cov("gest")+ b1cov("hr")+ b1cov("brain")+b2concurrent+
+               b2cov("N.p")+b2cov("density")+
+               b2cov("fruit.width")+
+               b2nodematch("iucn")+b2nodematch("taxgroup_tree")+
+               b2factor("ag")+b2factor("invasive")+ b2factor("endemic"))
+summaryfm_both_all6<-summary(Fm_both_all6)
+summaryfm_both_all6
+#low accuracy
+
+Fm_both_all7 <- ergm(subgraph_reduced_tree2b  ~ edges+b1factor("seeds")+b1factor("fruit")+
+                         b1cov("mass")+b1nodematch("Threat2")+
+                         b1nodematch("taxgroup2")+b1cov("area")+b1cov("N.l")+b1nodematch("habitat")+ 
+                         b1cov("gest")+ b1cov("hr")+ b1cov("brain")+b2concurrent+
+               b2cov("N.p")+b2cov("density")+
+               b2cov("fruit.width")+
+               b2nodematch("iucn")+b2nodematch("taxgroup_tree")+
+               b2factor("ag")+b2factor("invasive")+ b2factor("endemic"))
+summaryfm_both_all7<-summary(Fm_both_all7)
+summaryfm_both_all7
+
+Fm_both_all8 <- ergm(subgraph_reduced_tree2b ~ edges+b1factor("seeds")+b1factor("fruit")+
+                         b1cov("mass")+b1factor("Threat2")+
+                         b1factor("taxgroup2")+b1cov("area")+b1cov("N.l")+b1factor("habitat")+ 
+                         b1cov("gest")+ b1cov("hr")+ b1cov("brain") +b2concurrent+
+               b2cov("N.p")+b2cov("density")+
+               b2cov("fruit.width")+
+               b2factor("iucn")+b2nodematch("taxgroup_tree")+
+               b2factor("ag")+b2factor("invasive")+ b2factor("endemic"))
+summaryfm_both_all8<-summary(Fm_both_all8)
+summaryfm_both_all8
+#low accuracy
+
+Fm_both_all9 <- ergm(subgraph_reduced_tree2b ~ edges+b1factor("seeds")+b1factor("fruit")+
+                         b1cov("mass")+b1nodematch("Threat2")+
+                         b1factor("taxgroup2")+b1cov("area")+b1cov("N.l")+b1factor("habitat")+ 
+                         b1cov("gest")+ b1cov("hr")+ b1cov("brain")+b2concurrent+
+               b2cov("N.p")+b2cov("density")+
+               b2cov("fruit.width")+
+               b2factor("iucn")+b2nodematch("taxgroup_tree")+
+               b2factor("ag")+b2factor("invasive")+ b2factor("endemic"))
+summaryfm_both_all9<-summary(Fm_both_all9)
+summaryfm_both_all9
+#low accuracy
+
+Fm_both_all10 <- ergm(subgraph_reduced_tree2b ~ edges+b1factor("seeds")+b1factor("fruit")+
+                         b1cov("mass")+b1factor("Threat2")+
+                         b1nodematch("taxgroup2")+b1cov("area")+b1cov("N.l")+b1factor("habitat")+ 
+                         b1cov("gest")+ b1cov("hr")+ b1cov("brain")+b2concurrent+
+               b2cov("N.p")+b2cov("density")+
+               b2cov("fruit.width")+
+               b2factor("iucn")+b2nodematch("taxgroup_tree")+
+               b2factor("ag")+b2factor("invasive")+ b2factor("endemic"))
+summaryfm_both_all10 <- summary(Fm_both_all10)
+summaryfm_both_all10
+
+Fm_both_all11 <- ergm(subgraph_reduced_tree2b  ~ edges+b1factor("seeds")+b1factor("fruit")+
+                         b1cov("mass")+b1factor("Threat2")+
+                         b1factor("taxgroup2")+b1cov("area")+b1cov("N.l")+b1nodematch("habitat")+ 
+                         b1cov("gest")+ b1cov("hr")+ b1cov("brain")+b2concurrent+
+               b2cov("N.p")+b2cov("density")+
+               b2cov("fruit.width")+
+               b2factor("iucn")+b2nodematch("taxgroup_tree")+
+               b2factor("ag")+b2factor("invasive")+ b2factor("endemic"))
+summaryfm_both_all11<-summary(Fm_both_all11)
+summaryfm_both_all11
+#low accuracy
+
+Fm_both_all12 <- ergm(subgraph_reduced_tree2b ~ edges+b1factor("seeds")+b1factor("fruit")+
+                         b1cov("mass")+b1nodematch("Threat2")+
+                         b1nodematch("taxgroup2")+b1cov("area")+b1cov("N.l")+b1factor("habitat")+ 
+                         b1cov("gest")+ b1cov("hr")+ b1cov("brain")+b2concurrent+
+               b2cov("N.p")+b2cov("density")+
+               b2cov("fruit.width")+
+               b2factor("iucn")+b2nodematch("taxgroup_tree")+
+               b2factor("ag")+b2factor("invasive")+ b2factor("endemic"))
+summaryfm_both_all12<-summary(Fm_both_all12)
+summaryfm_both_all12
+
+Fm_both_all13 <- ergm(subgraph_reduced_tree2b ~ edges+b1factor("seeds")+b1factor("fruit")+
+                         b1cov("mass")+b1nodematch("Threat2")+
+                         b1factor("taxgroup2")+b1cov("area")+b1cov("N.l")+b1nodematch("habitat")+ 
+                         b1cov("gest")+ b1cov("hr")+ b1cov("brain")+b2concurrent+
+               b2cov("N.p")+b2cov("density")+
+               b2cov("fruit.width")+
+               b2factor("iucn")+b2nodematch("taxgroup_tree")+
+               b2factor("ag")+b2factor("invasive")+ b2factor("endemic"))
+summaryfm_both_all13<-summary(Fm_both_all13)
+summaryfm_both_all13
+#low accuracy
+
+Fm_both_all14 <- ergm(subgraph_reduced_tree2b  ~ edges+b1factor("seeds")+b1factor("fruit")+
+                         b1cov("mass")+b1factor("Threat2")+
+                         b1nodematch("taxgroup2")+b1cov("area")+b1cov("N.l")+b1nodematch("habitat")+ 
+                         b1cov("gest")+ b1cov("hr")+ b1cov("brain")+b2concurrent+
+               b2cov("N.p")+b2cov("density")+
+               b2cov("fruit.width")+
+               b2factor("iucn")+b2nodematch("taxgroup_tree")+
+               b2factor("ag")+b2factor("invasive")+ b2factor("endemic"))
+summaryfm_both_all14<-summary(Fm_both_all14)
+summaryfm_both_all14
+
+Fm_both_all15 <- ergm(subgraph_reduced_tree2b  ~ edges+b1factor("seeds")+b1factor("fruit")+
+                         b1cov("mass")+b1nodematch("Threat2")+
+                         b1nodematch("taxgroup2")+b1cov("area")+b1cov("N.l")+b1nodematch("habitat")+ 
+                         b1cov("gest")+ b1cov("hr")+ b1cov("brain")+b2concurrent+
+               b2cov("N.p")+b2cov("density")+
+               b2cov("fruit.width")+
+               b2factor("iucn")+b2nodematch("taxgroup_tree")+
+               b2factor("ag")+b2factor("invasive")+ b2factor("endemic"))
+summaryfm_both_all15<-summary(Fm_both_all15)
+summaryfm_both_all15
+
+AIC( Fm_both_all2, Fm_both_all4,Fm_both_all7, Fm_both_all10, Fm_both_all12,  Fm_both_all14, Fm_both_all15)
+
+#proceed with Fm_both_all2
+
+Fm_both_all2a <- ergm(subgraph_reduced_tree2b ~ edges+b1factor("seeds")+b1factor("fruit")+
+                         b1cov("mass")+b1factor("Threat2")+
+                         b1nodematch("taxgroup2")+b1cov("area")+b1cov("N.l")+b1factor("habitat")+ 
+                         b1cov("gest")+ b1cov("hr")+ b1cov("brain")+
+               b2cov("N.p")+b2cov("density")+
+               b2cov("fruit.width")+
+               b2nodematch("iucn")+b2nodematch("taxgroup_tree")+
+               b2factor("ag")+b2factor("invasive")+ b2factor("endemic"))
+summaryfm_both_all2a <- summary(Fm_both_all2a)
+summaryfm_both_all2a
+
+Fm_both_all2c <- ergm(subgraph_reduced_tree2b ~ edges+b1factor("seeds")+b1factor("fruit")+
+                         b1cov("mass")+b1factor("Threat2")+
+                         b1nodematch("taxgroup2")+b1cov("area")+b1cov("N.l")+b1factor("habitat")+ 
+                         b1cov("gest")+ b1cov("hr")+ b1cov("brain")+
+               b2cov("N.p")+b2cov("density")+
+               b2cov("fruit.width")+
+               b2nodematch("taxgroup_tree")+
+               b2factor("ag")+b2factor("invasive")+ b2factor("endemic"))
+summaryfm_both_all2c <- summary(Fm_both_all2c)
+summaryfm_both_all2c
+
+Fm_both_all2d <- ergm(subgraph_reduced_tree2b ~ edges+b1factor("seeds")+b1factor("fruit")+
+                         b1cov("mass")+b1factor("Threat2")+
+                         b1nodematch("taxgroup2")+b1cov("area")+b1cov("N.l")+b1factor("habitat")+ 
+                         b1cov("gest")+ b1cov("hr")+ b1cov("brain")+
+               b2cov("N.p")+b2cov("density")+
+               b2cov("fruit.width")+
+               b2nodematch("taxgroup_tree")+
+               b2factor("ag")+b2factor("invasive"))
+summaryfm_both_all2d <- summary(Fm_both_all2d)
+summaryfm_both_all2d
+
+Fm_both_all2e <- ergm(subgraph_reduced_tree2b ~ edges+b1factor("seeds")+b1factor("fruit")+
+                         b1cov("mass")+b1factor("Threat2")+
+                         b1nodematch("taxgroup2")+b1cov("area")+b1cov("N.l")+b1factor("habitat")+ 
+                         b1cov("gest")+ b1cov("hr")+ b1cov("brain")+
+               b2cov("N.p")+b2cov("density")+
+               b2nodematch("taxgroup_tree")+
+               b2factor("ag")+b2factor("invasive"))
+summaryfm_both_all2e <- summary(Fm_both_all2e)
+summaryfm_both_all2e
+
+Fm_both_all2f <- ergm(subgraph_reduced_tree2b ~ edges+b1factor("seeds")+b1factor("fruit")+
+                         b1cov("mass")+b1factor("Threat2")+
+                         b1nodematch("taxgroup2")+b1cov("area")+b1cov("N.l")+b1factor("habitat")+ 
+                         b1cov("gest")+ b1cov("hr")+ b1cov("brain")+
+               b2cov("N.p")+b2cov("density")+
+               b2nodematch("taxgroup_tree"))
+summaryfm_both_all2f <- summary(Fm_both_all2f)
+summaryfm_both_all2f
+
+Fm_both_all2g <- ergm(subgraph_reduced_tree2b ~ edges+b1factor("seeds")+b1factor("fruit")+
+                         b1cov("mass")+b1factor("Threat2")+
+                         b1nodematch("taxgroup2")+b1cov("area")+b1cov("N.l")+b1factor("habitat")+ 
+                         b1cov("gest")+ b1cov("hr")+ b1cov("brain")+
+               b2cov("N.p")+
+               b2nodematch("taxgroup_tree"))
+summaryfm_both_all2g <- summary(Fm_both_all2g)
+summaryfm_both_all2g
+
+Fm_both_all2h <- ergm(subgraph_reduced_tree2b ~ edges+b1factor("seeds")+b1factor("fruit")+
+                         b1cov("mass")+b1factor("Threat2")+
+                         b1cov("area")+b1cov("N.l")+b1factor("habitat")+ 
+                         b1cov("gest")+ b1cov("hr")+ b1cov("brain")+
+               b2cov("N.p")+
+               b2nodematch("taxgroup_tree"))
+summaryfm_both_all2h <- summary(Fm_both_all2h)
+summaryfm_both_all2h
+
+Fm_both_all2i <- ergm(subgraph_reduced_tree2b ~ edges+b1factor("seeds")+b1factor("fruit")+
+                         b1cov("mass")+b1factor("Threat2")+
+                         b1cov("area")+b1cov("N.l")+b1factor("habitat")+ 
+                         b1cov("gest")+ b1cov("hr")+ b1cov("brain")+
+               b2cov("N.p"))
+summaryfm_both_all2i <- summary(Fm_both_all2i)
+summaryfm_both_all2i
+
+AIC(Fm_both_all2, Fm_both_all2a ,  Fm_both_all2c, Fm_both_all2d, Fm_both_all2e, Fm_both_all2f, Fm_both_all2g,Fm_both_all2h, Fm_both_all2i)
+
+fm_all_both <-summaryfm_both_all2g
+
+```
